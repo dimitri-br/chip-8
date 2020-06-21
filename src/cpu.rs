@@ -45,6 +45,25 @@
 /// 
 /// ```
 /// 
+pub const chip8_fontset : [u8; 5 * 16] =
+[
+    0xF0, 0x90, 0x90, 0x90, 0xF0, //0
+    0x20, 0x60, 0x20, 0x20, 0x70, //1
+    0xF0, 0x10, 0xF0, 0x80, 0xF0, //2
+    0xF0, 0x10, 0xF0, 0x10, 0xF0, //3
+    0x90, 0x90, 0xF0, 0x10, 0x10, //4
+    0xF0, 0x80, 0xF0, 0x10, 0xF0, //5
+    0xF0, 0x80, 0xF0, 0x90, 0xF0, //6
+    0xF0, 0x10, 0x20, 0x40, 0x40, //7
+    0xF0, 0x90, 0xF0, 0x90, 0xF0, //8
+    0xF0, 0x90, 0xF0, 0x10, 0xF0, //9
+    0xF0, 0x90, 0xF0, 0x90, 0x90, //A
+    0xE0, 0x90, 0xE0, 0x90, 0xE0, //B
+    0xF0, 0x80, 0x80, 0x80, 0xF0, //C
+    0xE0, 0x90, 0x90, 0x90, 0xE0, //D
+    0xF0, 0x80, 0xF0, 0x80, 0xF0, //E
+    0xF0, 0x80, 0xF0, 0x80, 0x80  //F
+];
 
 
 pub struct CPU{
@@ -64,6 +83,8 @@ pub struct CPU{
 
     gfx : [u8; 64 * 32],
 
+    keys : [u8; 16]
+
 }
 
 
@@ -79,7 +100,14 @@ impl CPU{
     /// let mut cpu = CPU::new().expect("Error creating CPU instance");     
     /// ```
     pub fn new() -> Result<Self, &'static str>{
-        let cpu = CPU { memory : [0; 4096], registers : [0; 16], stack : [0; 12], audio_timer: 0, game_timer: 0, index_register: 0, opcode: 0, program_counter: 0x200, stack_ptr: 0, gfx: [0; 64 * 32] };
+        let mut cpu = CPU { memory : [0; 4096], registers : [0; 16], stack : [0; 12], audio_timer: 0, game_timer: 0, index_register: 0, opcode: 0, program_counter: 0x200, stack_ptr: 0, gfx: [0; 64 * 32], keys : [0; 16] };
+        
+        
+        
+        //load charset into memory
+        for i in 0..80{
+            cpu.set_memory(chip8_fontset[i], i as u16).unwrap();
+        }
         Ok(cpu)
     }
 
@@ -109,7 +137,7 @@ impl CPU{
     /// let value = cpu.read_from_memory(0).expect("Error reading from memory");
     /// ```
     pub fn get_memory(&self, location : u16) -> Result<u8, &'static str>{
-        let read_value : u8 = self.memory[location as usize];
+        let read_value = self.memory[location as usize];
         Ok(read_value)
     }
 
@@ -146,7 +174,7 @@ impl CPU{
     /// let value = cpu.read_register(0xA).expect("Error writing to register");
     /// ```
     pub fn get_register(&self, register : u16) -> Result<u8, &'static str>{
-        let value : u8 = self.registers[register as usize];
+        let value = self.registers[register as usize];
         Ok(value)
     }
 
@@ -354,6 +382,21 @@ impl CPU{
     pub fn set_gfx(&mut self, location : u16, value :u8) -> Result<(), &'static str>{
         self.gfx[location as usize] = value;
         Ok(())
+    }
+
+    pub fn clr_gfx(&mut self) -> Result<(), &'static str>{
+        self.gfx = [0; 64 *32];
+        Ok(())
+    }
+
+    pub fn set_key(&mut self, location : u8, value : u8) -> Result<(), &'static str>{
+        self.keys[location as usize] = value;
+        Ok(())
+    }
+
+    pub fn get_key(&self, location : u8) -> Result<u8, &'static str>{
+        let value = self.keys[location as usize];
+        Ok(value)
     }
 
 }
