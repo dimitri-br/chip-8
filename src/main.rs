@@ -15,7 +15,11 @@ fn main(){
     //read register
     let reg_value = cpu.read_register(0xA).expect("Error reading from register");
 
+    //write to stack
     cpu.write_subroutine(0x00, reg_value).expect("Error writing to stack");
+    //read from stack
+    let stack_value = cpu.read_subroutine(0x00).expect("Error reading from stack");
+
     //output the value
-    println!("{:#x?}",reg_value);
+    println!("{:#x?}", stack_value);
 }

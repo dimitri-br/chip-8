@@ -107,7 +107,7 @@ impl CPU{
         Ok(value)
     }
 
-    /// # Write a subrouting
+    /// # Write a subroutine
     /// 
     /// Write a subroutine to the stack. This is an instruction to run.
     /// This will overwrite any instrution currently on the stack
@@ -125,7 +125,7 @@ impl CPU{
         Ok(())
     }
 
-    /// # Read a subrouting
+    /// # Read a subroutine
     /// 
     /// Read a subroutine from the stack. This is an instruction to run.
     /// 
