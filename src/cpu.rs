@@ -565,7 +565,7 @@ pub fn load_rom(mut cpu : CPU) -> Result<CPU, &'static str>{
         cpu.set_memory(*line, current_mem).unwrap();
         current_mem += 1;
     }
-
+    cpu.set_opcode(cpu.get_program_counter().unwrap()).unwrap();
     Ok(cpu)
 
 }
