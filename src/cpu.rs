@@ -4,6 +4,17 @@
 /// 
 /// It make it easier to access and change the data, with helpful functions to generate a new CPU instance.
 /// 
+/// 
+/// # Important Information About Chip-8
+/// Memory size is 4kb
+/// 
+/// 16 registers from V0 - VF, each register can contain any hexadecimal number from 0x00 to 0xFF
+/// 
+/// Space for subroutine calls. Must have >=12
+/// 
+/// Timer will control delay of frames and sound.
+/// 
+/// 
 /// # Example
 /// 
 /// ```
@@ -14,13 +25,33 @@
 /// cpu.add_to_memory(32, 0).expect("Error writing to memory");
 /// 
 /// //read from memory
-/// let value = cpu.read_from_memory(0).expect("Error reading from memory");
+/// let mem_value = cpu.read_from_memory(0).expect("Error reading from memory");
+///
+/// //write register
+/// cpu.write_register(0xA, mem_value).expect("Error writing to register");
+/// 
+/// //read register
+/// let reg_value = cpu.read_register(0xA).expect("Error reading from register");
+///
+/// //write to stack
+/// cpu.write_subroutine(0x00, reg_value).expect("Error writing to stack");
+/// 
+/// //read from stack
+/// let stack_value = cpu.read_subroutine(0x00).expect("Error reading from stack");
+///
+/// //set timer
+/// cpu.set_timer(1, stack_value).expect("Error setting timer");
+/// 
+/// 
 /// ```
+/// 
+
+
 pub struct CPU{
-    memory : [u8; 4096], /// Memory size is 4kb
-    registers : [u8; 16], /// 16 registers from V0 - VF, each register can contain any hexadecimal number from 0x00 to 0xFF
-    stack : [u8; 12], /// Space for subroutine calls. Must have >=12
-    timers : [u8; 2],
+    memory : [u8; 4096], 
+    registers : [u8; 16], 
+    stack : [u8; 12], 
+    timers : [u8; 2], 
 }
 
 
@@ -143,5 +174,34 @@ impl CPU{
         Ok(value)
     }
 
+
+    /// # Set a timer
+    /// 
+    /// Set a timer variable. This value can be either:
+    /// 
+    /// 0 - Game Timer. This controls the flow of time (typically 60hz)
+    /// 
+    /// 1 - Sound Timer. This controls the delay between sound.
+    /// 
+    /// Any other number will return an error.
+    /// 
+    /// Helpful function
+    /// 
+    /// # Example
+    /// 
+    /// ```
+    /// 
+    /// //set sound timer to 5
+    /// cpu.set_timer(1, 0x5).expect("Error setting timer");
+    /// ```
+    pub fn set_timer(&mut self, timer : u8, value : u8) -> Result<(), &'static str>{
+        match timer{
+            0 => self.timers[0] = value,
+            1 => self.timers[1] = value,
+            _ => return Err("Error!      Only 2 timers availiable!      0 - Game Delay        1 - Sound Delay")
+        }
+
+        Ok(())
+    }
     
 }
