@@ -62,6 +62,8 @@ pub struct CPU{
     audio_timer : u8,
     game_timer : u8, 
 
+    gfx : [u8; 64 * 32],
+
 }
 
 
@@ -77,7 +79,7 @@ impl CPU{
     /// let mut cpu = CPU::new().expect("Error creating CPU instance");     
     /// ```
     pub fn new() -> Result<Self, &'static str>{
-        let cpu = CPU { memory : [0; 4096], registers : [0; 16], stack : [0; 12], audio_timer: 0, game_timer: 0, index_register: 0, opcode: 0, program_counter: 0x200, stack_ptr: 0 };
+        let cpu = CPU { memory : [0; 4096], registers : [0; 16], stack : [0; 12], audio_timer: 0, game_timer: 0, index_register: 0, opcode: 0, program_counter: 0x200, stack_ptr: 0, gfx: [0; 64 * 32] };
         Ok(cpu)
     }
 
@@ -91,7 +93,7 @@ impl CPU{
     /// //write value '32' to memory location '0'
     /// cpu.add_to_memory(32, 0).expect("Error writing to memory");
     /// ```
-    pub fn add_to_memory(&mut self, data : u8, location : u16) -> Result<&'static str, &'static str>{
+    pub fn set_memory(&mut self, data : u8, location : u16) -> Result<&'static str, &'static str>{
         self.memory[location as usize] = data;
         Ok("Successfully wrote to memory")
     }
@@ -106,7 +108,7 @@ impl CPU{
     /// //read value from memory location '0'
     /// let value = cpu.read_from_memory(0).expect("Error reading from memory");
     /// ```
-    pub fn read_from_memory(&self, location : u16) -> Result<u8, &'static str>{
+    pub fn get_memory(&self, location : u16) -> Result<u8, &'static str>{
         let read_value : u8 = self.memory[location as usize];
         Ok(read_value)
     }
@@ -307,7 +309,7 @@ impl CPU{
     /// //read the index register
     /// cpu.read_index_register(0x5).expect("Error setting timer");
     /// ```
-    pub fn read_index_register(&self) -> Result<u16, &'static str>{
+    pub fn get_index_register(&self) -> Result<u16, &'static str>{
         let value = self.index_register;
         Ok(value)
     }
@@ -325,7 +327,7 @@ impl CPU{
         Ok(())
     }
     pub fn set_opcode(&mut self, location : u16) -> Result<(), &'static str>{
-        self.opcode = (((self.read_from_memory(location).unwrap() as u64) << 8) + (self.read_from_memory(location).unwrap() as u64)) as u16;
+        self.opcode = (((self.get_memory(location).unwrap() as u64) << 8) | (self.get_memory(location + 1).unwrap() as u64)) as u16;
         Ok(())
     }
     pub fn get_opcode(&self) -> Result<u16, &'static str>{
@@ -341,9 +343,17 @@ impl CPU{
     pub fn get_stack_pointer(&self) -> Result<u8, &'static str>{
         let value = self.stack_ptr;
         Ok(value)
-    }
-}
 
-pub fn run_cpu(cpu : CPU) -> Result<(), &'static str>{
-    Ok(())
+    }
+
+    pub fn get_gfx(&self, location : u16) -> Result<u8, &'static str>{
+        let value = self.gfx[location as usize];
+        Ok(value)
+    }
+
+    pub fn set_gfx(&mut self, location : u16, value :u8) -> Result<(), &'static str>{
+        self.gfx[location as usize] = value;
+        Ok(())
+    }
+
 }
