@@ -15,8 +15,8 @@ use std::time::Duration;
 
 
 
-const WIDTH : u32 = 640;
-const HEIGHT : u32 = 320;
+const WIDTH : u32 = 680;
+const HEIGHT : u32 = 480;
 
 fn main(){
     
@@ -24,8 +24,8 @@ fn main(){
     let file = args[1].to_owned();
 
     //calculate scale
-    let scale_x = (WIDTH / 64) as u16;
-    let scale_y = (HEIGHT / 32) as u16;
+    let scale_x = (WIDTH / 64) as u32;
+    let scale_y = (HEIGHT / 32) as u32;
 
     
     let sdl_context = sdl2::init().unwrap();
@@ -57,7 +57,7 @@ fn main(){
     
     let mut cpu = load();
     
-    cpu = load_rom(cpu,file);
+    cpu = load_rom(cpu,file.clone());
     let music = sdl2::mixer::Music::from_file("./sfx/beep.wav").unwrap();
 
     'running: loop {
@@ -93,7 +93,10 @@ fn main(){
                             Some(Keycode::X) => cpu.key[0x0] =  1,
                             Some(Keycode::C) => cpu.key[0xB] =  1,
                             Some(Keycode::V) => cpu.key[0xF] =  1,
-                                //Some(Keycode::P) => paused = !paused,
+                            Some(Keycode::P) => {
+                                cpu = load();
+                                cpu = load_rom(cpu, file.clone());
+                            },
                             _ => {}
                                 
                                 
@@ -135,23 +138,24 @@ fn main(){
             cpu = emulate_cycle(cpu);
 
                 //draw
-            canvas.set_draw_color(Color::RGB(255, 255, 255));
+            
 
 
 
 
             if cpu.draw{
-                for y in 0..32{
-                    for x in 0..64{
-                        if cpu.vram[(y as usize*64) + x as usize] == 0{
-                                    //off
-                        }else{
-                            canvas.fill_rect(Rect::new((x * scale_x).into(), (y * scale_y).into(), (1 * scale_x).into(), (1 * scale_y).into())).unwrap();    //on
+                for x in 0..64{
+                    for y in 0..32{
+                        
+                        canvas.set_draw_color(Color::WHITE);
+                        if cpu.vram[(y * 64) as usize + x as usize] != 0{
                             
+                            canvas.fill_rect(Rect::new((x * scale_x) as i32, (y * scale_y) as i32, scale_x, scale_y)).unwrap();
+                        }
                     }
-                
+                    
                 }
-                cpu.draw = false;
+                //cpu.draw = false;
             }
 
             canvas.present();
@@ -164,5 +168,5 @@ fn main(){
 
             thread::sleep(Duration::from_millis(5));
         }    
-    }  
-} 
+    
+}

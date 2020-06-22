@@ -3,25 +3,33 @@ use std::io::Read;
 
 pub struct Reader{
     file : String,
-    pub content : Vec::<u8>
+    pub ROM : [u8; 3584]
 }
 
 impl Reader{
     pub fn new(path : String) -> Result<Self, &'static str>{
         
-        let reader = Reader { file : path.to_owned(), content : Vec::<u8>::new()};    
+        let reader = Reader { file : path.to_owned(), ROM: [0x0; 3584]};    
         Ok(reader)
 
 
     }
     pub fn open(&mut self) -> Result<(), &'static str>{
         let mut file = File::open(&self.file).expect("Error opening file");
-        file.read_to_end(&mut self.content).expect("Error reading file");
-        let len = self.content.len();
+        let mut buffer = [0u8; 3584];
+        let mut len = 0;
+        let bytes_read = if let Ok(bytes_read) = file.read(&mut buffer) {
+            len += 1;
+            bytes_read
+        } else {
+            0
+        };
         if len > 4096 - 512{
             panic!("Error! Max file size is {} bytes, but ROM loaded was {} bytes", 4096 - 512, len)
         }
-        println!("Loaded ROM: {}\nROM size:{}", self.file, len);
+        self.ROM = buffer;
+        println!("Loaded ROM: {}", self.file);
+        
         Ok(())
     }
 }
