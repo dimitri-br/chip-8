@@ -10,7 +10,7 @@ edition = "2018"
 [dependencies.sdl2]
 version = "*"
 default-features = true
-features = ["mixer"]
+features = ["mixer","ttf"]
 
 [dependencies.sdl2-sys]
 version = "*"

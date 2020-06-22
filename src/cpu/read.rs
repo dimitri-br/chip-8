@@ -18,18 +18,24 @@ impl Reader{
         let mut file = File::open(&self.file).expect("Error opening file");
         let mut buffer = [0u8; 3584];
         let mut len = 0;
-        let bytes_read = if let Ok(bytes_read) = file.read(&mut buffer) {
+        let _bytes_read = if let Ok(bytes_read) = file.read(&mut buffer) {
             len += 1;
             bytes_read
         } else {
             0
         };
-        if len > 4096 - 512{
+        let mut mem = 0;
+        for _ in buffer.iter(){
+            mem += 1;
+        }
+        if mem > 4096 - 512{
             panic!("Error! Max file size is {} bytes, but ROM loaded was {} bytes", 4096 - 512, len)
         }
         self.ROM = buffer;
-        println!("Loaded ROM: {}", self.file);
         
+        println!("• Loaded ROM: {}", self.file);
+       
         Ok(())
     }
+    
 }

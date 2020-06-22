@@ -30,7 +30,7 @@ pub struct CPU {
     pub sp : u8,
     pub registers : [u8; 16],
     pub memory : [u8; 4096],
-    pub stack : [u16; 256],
+    pub stack : [u16; 16],
     pub vram : [u8; 64 * 32],
     pub key : [u8; 16],
     pub audio_timer : u8,
@@ -52,7 +52,7 @@ pub fn load() -> CPU{
         sp: 0x0,
         registers : [0x0; 16],
         memory: [0x0; 4096],
-        stack: [0x0; 256],
+        stack: [0x0; 16],
         vram: [0x0; 64 * 32],
         key: [0x0; 16],
         audio_timer: 0x0,
@@ -80,28 +80,35 @@ pub fn load_rom(mut cpu: CPU, file: String) -> CPU{
 
 
 pub fn emulate_cycle(mut cpu : CPU) -> CPU{
+    
     let opcode : u16 = (cpu.memory[cpu.pc as usize] as u16) << 8 | cpu.memory[(cpu.pc + 1) as usize]  as u16;
     let X = ((opcode & 0x0F00) >> 8) as usize;
     let Y = ((opcode & 0x00F0) >> 4) as usize;
     //println!("{:#x?}", opcode);
     match &cpu.mode{
-        Mode::Debug => println!("DEBUG - Current Opcode: {:#x?}\nVX: {}\nVY: {}\nPC: {}\nI: {}\nSP: {}",&opcode,&cpu.registers[((&opcode & 0x0F00) >> 8) as usize], &cpu.registers[((&opcode & 0x00F0) >> 4) as usize], &cpu.pc, &cpu.index_register, &cpu.sp),
+        Mode::Debug => println!("DEBUG - Step {} - Current Opcode: {:#x?}\nVX: {}\nVY: {}\nPC: {}\nI: {}\nSP: {}",cpu.step, &opcode,&cpu.registers[((&opcode & 0x0F00) >> 8) as usize], &cpu.registers[((&opcode & 0x00F0) >> 4) as usize], &cpu.pc, &cpu.index_register, &cpu.sp),
         _ => {}
     };
     match opcode & 0xF000{
         0x0000 => {
-            match opcode & 0x00F0{
-                0x0000 => {
-                    cpu.vram = [0; 2048];
+            match opcode & 0x000F{
+                0x0000 => { //0x00E0 Clear screen
+                    for i in 0..2048{
+                        cpu.vram[i] = 0x0;
+                    }
                     cpu.draw = true;
                     cpu.pc += 2;    
+                    //panic!("CLS: {:#x?}", opcode & 0x000F)
                 }
-                0x00E0 => {
+                0x000E => { //0x00EE Return from subroutine
+                    
                     cpu.sp -= 1;
+
                     cpu.pc = cpu.stack[cpu.sp as usize] as u16;
                     cpu.pc += 2;
-                }
-                _ => {}
+                    //panic!("Leaving stack: {:#x?}", opcode & 0x000F);
+                }              
+                _ => {panic!("Unknown opcode @ 0000: {:#x?}", opcode & 0x000F)}
             }
         }
         0x1000 => {
@@ -112,18 +119,19 @@ pub fn emulate_cycle(mut cpu : CPU) -> CPU{
             cpu.stack[cpu.sp as usize] = cpu.pc;
             cpu.sp += 1;
             cpu.pc = opcode & 0x0FFF;
+            
         }
         0x3000 => {
-            
+            //if vX == NN, skip next instruction
             if (cpu.registers[X] as u16) == (opcode & 0x00FF){
                 cpu.pc += 4;
-                
-                
+                        
             }else{
                 cpu.pc += 2
             }
         }
         0x4000 => {
+            //if vX != NN, skip next instruction
             if (cpu.registers[X] as u16) != (opcode & 0x00FF){
                 cpu.pc += 4;
                 
@@ -207,18 +215,18 @@ pub fn emulate_cycle(mut cpu : CPU) -> CPU{
                             cpu.registers[0xF] = 1;
                         }
                         
-                        cpu.registers[X] = &cpu.registers[Y] - &cpu.registers[X];
+                        cpu.registers[X] = cpu.registers[Y] - cpu.registers[X];
                         cpu.pc += 2;
                         
                        
                     }
                     0x000E =>{
-                        cpu.registers[0xF] = &cpu.registers[X] >> 7;
+                        cpu.registers[0xF] = cpu.registers[X] >> 7;
                         cpu.registers[X] <<= 1;
                         cpu.pc += 2;
                     },
     
-                    _ => {}
+                    _ => {panic!("Unknown opcode @ 8000: {:#x?}", opcode & 0x00F)}
                 }
             }
         0x9000 => {
@@ -247,7 +255,7 @@ pub fn emulate_cycle(mut cpu : CPU) -> CPU{
             cpu.registers[0xF] = 0;// Sets to 1 if there's a collision
        
             for y_line in 0..sprite_height{
-                let mut line = cpu.memory[(cpu.index_register + y_line as u16) as usize];
+                let line = cpu.memory[(cpu.index_register + y_line as u16) as usize];
                 for x_line in 0..8{
                     let pixel = line & (0x80 >> x_line);
                     if pixel != 0{
@@ -308,7 +316,7 @@ pub fn emulate_cycle(mut cpu : CPU) -> CPU{
                         cpu.pc += 2;
                     }
                 }
-                _ => {}
+                _ => {panic!("Unknown opcode @ E000: {:#x?}", opcode & 0x00FF)}
             }
         }
         0xF000 => {
@@ -318,8 +326,12 @@ pub fn emulate_cycle(mut cpu : CPU) -> CPU{
                     cpu.pc += 2;
                 }
                 0x000A => {
+                    match &cpu.mode{
+                        Mode::Debug => println!("Waiting for keypress..."),
+                        _ => {}
+                    };
                     let mut key_pressed = false;
-
+                    
                     for i in 0..16{
                         if cpu.key[i] != 0{
                             key_pressed = true;
@@ -375,12 +387,12 @@ pub fn emulate_cycle(mut cpu : CPU) -> CPU{
                     cpu.index_register += X as u16 + 1;
                     cpu.pc += 2;
                 }
-                _ => {}
+                _ => {panic!("Unknown opcode @ 0xF000: {:#x?}", opcode & 0x00FF)}
             }
     
 
         }
-        _ => {panic!("Not known!")}
+        _ => {panic!("Unknown opcode @ main: {:#x?}", opcode & 0xF0FF)}
 
 
     }

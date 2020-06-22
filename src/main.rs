@@ -6,6 +6,8 @@ use std::env;
 
 extern crate sdl2; 
 
+
+
 use sdl2::pixels::Color;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
@@ -15,23 +17,50 @@ use std::time::Duration;
 
 
 
-const WIDTH : u32 = 680;
-const HEIGHT : u32 = 480;
+const WIDTH : u32 = 640;
+const HEIGHT : u32 = 320;
 
 fn main(){
-    
+    //get args
     let args: Vec<String> = env::args().collect();
     let file = args[1].to_owned();
 
     //calculate scale
     let scale_x = (WIDTH / 64) as u32;
     let scale_y = (HEIGHT / 32) as u32;
+    
+    
+
+
+    //cpu
+    let mut cpu = load();
+    if file == String::from(""){
+     
+    }else{
+        cpu = load_rom(cpu, file.clone());
+    }
+    
 
     
+
+    let clock_speed = 600; //in hz
+
+    let mut delay = 1000000 / clock_speed; // delay in us
+
+    //sdl and gfx
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
+    let title = format!("Chip-8: {}", file);
+    let window = video_subsystem.window(&title, WIDTH, HEIGHT)
+        .position_centered()
+        .build()
+        
+        .unwrap();
+ 
+    let mut canvas = window.into_canvas().build().unwrap();
  
 
+    //sound
     let frequency = 44_100;
     let format = AUDIO_S16LSB; // signed 16 bit samples, in little-endian byte order
     let channels = DEFAULT_CHANNELS; // Stereo
@@ -40,31 +69,21 @@ fn main(){
     let _mixer_context = sdl2::mixer::init(
         InitFlag::MP3 | InitFlag::FLAC | InitFlag::MOD | InitFlag::OGG
     ).unwrap();
-
-
-    let window = video_subsystem.window("chip-8", WIDTH, HEIGHT)
-        .position_centered()
-        .build()
-        .unwrap();
+    let music = sdl2::mixer::Music::from_file("./sfx/beep.wav").unwrap();
+    
  
-    let mut canvas = window.into_canvas().build().unwrap();
- 
-    canvas.set_draw_color(Color::RGB(0, 255, 255));
-    canvas.clear();
-    canvas.present();
+    //events
     let mut event_pump = sdl_context.event_pump().unwrap();
 
     
-    let mut cpu = load();
-    
-    cpu = load_rom(cpu,file.clone());
-    let music = sdl2::mixer::Music::from_file("./sfx/beep.wav").unwrap();
 
+    
+    //emu loop
     'running: loop {
-        
+            //clr screen
             canvas.set_draw_color(Color::RGB(0,0,0));
             canvas.clear();
-
+            //events
             for event in event_pump.poll_iter() {
                 match event {
                     Event::Quit {..} => {
@@ -97,6 +116,17 @@ fn main(){
                                 cpu = load();
                                 cpu = load_rom(cpu, file.clone());
                             },
+                            Some(Keycode::M) => {   //Decrease emulation speed
+                                delay += 1;
+                                
+
+                            }
+                            Some(Keycode::L) => {
+                                if delay != 0{
+                                    delay -= 1; //Increase emulation speed        
+                                }
+                                
+                            }
                             _ => {}
                                 
                                 
@@ -134,15 +164,21 @@ fn main(){
                 }
             }
                 
-                // The rest of the game loop goes here...
+            //emulate cpu cycle
             cpu = emulate_cycle(cpu);
 
                 //draw
             
 
 
+            //sound
+            if cpu.audio_play{
+                
+                music.play(1).unwrap();
+                cpu.audio_play = false;
+            }
 
-
+            //gfx
             if cpu.draw{
                 for x in 0..64{
                     for y in 0..32{
@@ -159,14 +195,10 @@ fn main(){
             }
 
             canvas.present();
-
-            if cpu.audio_play{
-                
-                music.play(1).unwrap();
-                cpu.audio_play = false;
-            }
-
-            thread::sleep(Duration::from_millis(5));
-        }    
+            
+            //emulate speed
+            thread::sleep(Duration::from_micros(delay));
+        }  
+ 
     
 }
