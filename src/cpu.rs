@@ -27,40 +27,47 @@ const CHIP8_FONT : [u8; 5 * 16] =
 pub struct CPU {
     pub pc : u16,
     pub opcode : u16,
-    pub I : u16,
+    pub index_register : u16,
     pub sp : u8,
-    pub V : [u8; 16],
+    pub registers : [u8; 16],
     pub memory : [u8; 4096],
     pub stack : [u16; 256],
     pub vram : [u8; 64 * 32],
     pub key : [u8; 16],
     pub audio_timer : u8,
+    pub audio_play : bool,
     pub delay_timer : u8,
     pub draw : bool,
+    mode: Mode,
 }
-
+pub enum Mode{
+    Debug,
+    Normal
+}
 pub fn load() -> CPU{
     let mut cpu = CPU { 
         pc: 0x200,
         opcode: 0x0,
-        I: 0x0,
+        index_register: 0x0,
         sp: 0x0,
-        V : [0x0; 16],
+        registers : [0x0; 16],
         memory: [0x0; 4096],
         stack: [0x0; 256],
         vram: [0x0; 64 * 32],
         key: [0x0; 16],
         audio_timer: 0x0,
+        audio_play: false,
         delay_timer: 0x0,
         draw: true,
+        mode: Mode::Normal
     };
     for i in 0..80{
-        cpu.memory[i] = CHIP8_FONT[i];
+        cpu.memory[i + 0x50] = CHIP8_FONT[i];
     }
     cpu
 }
-pub fn load_rom(mut cpu: CPU) -> CPU{
-    let mut reader = Reader::new("programs/pong").unwrap();
+pub fn load_rom(mut cpu: CPU, file: String) -> CPU{
+    let mut reader = Reader::new(file).unwrap();
     reader.open().unwrap();
     let mut current_mem = 0x200;
     for line in reader.content.iter(){
@@ -72,16 +79,17 @@ pub fn load_rom(mut cpu: CPU) -> CPU{
 pub fn emulate_cycle(mut cpu : CPU) -> CPU{
     let opcode : u16 = (cpu.memory[cpu.pc as usize] as u16) << 8 | cpu.memory[(cpu.pc + 1) as usize]  as u16;
     //println!("{:#x?}", opcode);
-    println!("DEBUG - Current Opcode: {:#x?}\nVX: {}\nVY: {}\nPC: {}\nI: {}\nSP: {}",opcode,cpu.V[((opcode & 0x0F00) >> 8) as usize], cpu.V[((opcode & 0x00F0) >> 4) as usize], cpu.pc, cpu.I, cpu.sp);
+    match &cpu.mode{
+        Mode::Debug => println!("DEBUG - Current Opcode: {:#x?}\nVX: {}\nVY: {}\nPC: {}\nI: {}\nSP: {}",&opcode,&cpu.registers[((&opcode & 0x0F00) >> 8) as usize], &cpu.registers[((&opcode & 0x00F0) >> 4) as usize], &cpu.pc, &cpu.index_register, &cpu.sp),
+        _ => {}
+    };
     match opcode & 0xF000{
         0x0000 => {
             match opcode & 0x00F0{
                 0x0000 => {
-                    for pixel in cpu.vram.iter_mut(){
-                        *pixel = 0x0;
-                    }
+                    cpu.vram = [0; 2048];
                     cpu.draw = true;
-                    cpu.pc += 2;
+                    cpu.pc += 2;    
                 }
                 0x00E0 => {
                     cpu.sp -= 1;
@@ -101,7 +109,7 @@ pub fn emulate_cycle(mut cpu : CPU) -> CPU{
         }
         0x3000 => {
             
-            if cpu.V[((opcode & 0x0F00) >> 8) as usize] as u16 == (opcode & 0x00FF){
+            if (cpu.registers[((opcode & 0x0F00) >> 8) as usize] as u16) == (opcode & 0x00FF){
                 cpu.pc += 4;
                 
                 
@@ -110,7 +118,7 @@ pub fn emulate_cycle(mut cpu : CPU) -> CPU{
             }
         }
         0x4000 => {
-            if cpu.V[((opcode & 0x0F00) >> 8) as usize]  as u16 != (opcode & 0x00FF){
+            if (cpu.registers[((opcode & 0x0F00) >> 8) as usize] as u16) != (opcode & 0x00FF){
                 cpu.pc += 4;
                 
             }else{
@@ -118,7 +126,7 @@ pub fn emulate_cycle(mut cpu : CPU) -> CPU{
             }
         }
         0x5000 => {
-            if cpu.V[(((opcode & 0x0F00) >> 8) as usize) as usize] == cpu.V[(((opcode & 0x00F0) >> 4) as usize) as usize]{
+            if cpu.registers[(((opcode & 0x0F00) >> 8) as usize) as usize] == cpu.registers[(((opcode & 0x00F0) >> 4) as usize) as usize]{
                 cpu.pc += 4;
                 
             }else{
@@ -126,12 +134,12 @@ pub fn emulate_cycle(mut cpu : CPU) -> CPU{
             }
         }
         0x6000 => {
-            cpu.V[((opcode & 0x0F00) >> 8) as usize] = (opcode & 0x00FF) as u8;
+            cpu.registers[((opcode & 0x0F00) >> 8) as usize] = (opcode & 0x00FF) as u8;
             cpu.pc += 2;
             
         }
         0x7000 => {
-            cpu.V[(((opcode & 0x0F00) >> 8) as usize) as usize] += (opcode & 0x00FF) as u8;
+            cpu.registers[(((opcode & 0x0F00) >> 8) as usize) as usize] += (opcode & 0x00FF) as u8;
             cpu.pc += 2;
             
         }
@@ -139,74 +147,67 @@ pub fn emulate_cycle(mut cpu : CPU) -> CPU{
            
             match opcode & 0x000F{
                     0x0000 =>{ // 0x8X Y0: Sets VX to the value of VY
-                        cpu.V[((opcode & 0x0F00) >> 8) as usize] = cpu.V[((opcode & 0x00F0) >> 4) as usize];
-                        cpu.pc += 2;
-                        
+                        cpu.registers[((opcode & 0x0F00) >> 8) as usize] = cpu.registers[((opcode & 0x00F0) >> 4) as usize];
+                        cpu.pc += 2; 
                     }
                     0x0001 =>{
-                        cpu.V[((opcode & 0x0F00) >> 8) as usize] |= cpu.V[((opcode & 0x00F0) >> 4) as usize];
-                        panic!("match! {} {}",cpu.V[(((opcode & 0x0F00) >> 8) as usize) as usize], cpu.V[(((opcode & 0x00f0) >> 4) as usize) as usize]);
-                        
+                        cpu.registers[((opcode & 0x0F00) >> 8) as usize] |= cpu.registers[((opcode & 0x00F0) >> 4) as usize];                      
                         cpu.pc += 2;
                     }
-                    0x0002 =>{
-                        
-                        cpu.V[((opcode & 0x0F00) >> 8) as usize] &= cpu.V[((opcode & 0x00F0) >> 4) as usize];
+                    0x0002 =>{      
+                        cpu.registers[((opcode & 0x0F00) >> 8) as usize] &= cpu.registers[((opcode & 0x00F0) >> 4) as usize];
                         cpu.pc += 2;
                         
                     }
                     0x0003 =>{
-                        cpu.V[((opcode & 0x0F00) >> 8) as usize] ^= cpu.V[((opcode & 0x00F0) >> 4) as usize];
+                        cpu.registers[((opcode & 0x0F00) >> 8) as usize] ^= cpu.registers[((opcode & 0x00F0) >> 4) as usize];
                         cpu.pc += 2;
                     }
                     0x0004 =>{
-                        //println!("VX before - {}",cpu.V[((opcode & 0x0F00) >> 8) as usize]);
-                        if cpu.V[((opcode & 0x00F0) >> 4) as usize] > (0xFF - cpu.V[((opcode & 0x0F00) >> 8) as usize]){
-                            cpu.V[0xF] = 1;
+                        if cpu.registers[((opcode & 0x00F0) >> 4) as usize] > (0xFF - cpu.registers[((opcode & 0x0F00) >> 8) as usize]){
+                            cpu.registers[0xF] = 1;
                         }else{
-                            cpu.V[0xF] = 0;
+                            cpu.registers[0xF] = 0;
                         }
-                        cpu.V[((opcode & 0x0F00) >> 8) as usize] += cpu.V[((opcode & 0x00F0) >> 4) as usize];
-                        cpu.pc += 2;
-                        //panic!("VX: {} - VY: {} - V15: {}", cpu.V[((opcode & 0x0F00) >> 8) as usize], cpu.V[((opcode & 0x00F0) >> 4) as usize], cpu.V[0xF]);
-                        
+                        cpu.registers[((opcode & 0x0F00) >> 8) as usize] += cpu.registers[((opcode & 0x00F0) >> 4) as usize];
+                        cpu.pc += 2;                        
                     }
                     0x0005 =>{
                         //set register to be subtracted values of VX and VY. Use VF as a carry, as each register can only hold 8 bits (max 255). If VF = 1, carry. else, do not.
-                        if cpu.V[((opcode & 0x00F0) >> 4) as usize] > cpu.V[((opcode & 0x0F00) >> 8) as usize]{
-                            cpu.V[0xF] = 1;
+                        if cpu.registers[((opcode & 0x00F0) >> 4) as usize] > cpu.registers[((opcode & 0x0F00) >> 8) as usize]{
+                            cpu.registers[0xF] = 0;
                         }else{
-                            cpu.V[0xF] = 0;
+                            cpu.registers[0xF] = 1;
                         }
                         
-                        cpu.V[((opcode & 0x0F00) >> 8) as usize] -= cpu.V[((opcode & 0x00F0) >> 4) as usize];
+                        cpu.registers[((opcode & 0x0F00) >> 8) as usize] -= cpu.registers[((opcode & 0x00F0) >> 4) as usize];
                        
                         cpu.pc += 2;
                         
                     }
                     0x0006 =>{
                         
-                        cpu.V[0xF] =  cpu.V[((opcode & 0x0F00) >> 8) as usize] & 0x1;
-                        cpu.V[((opcode & 0x0F00) >> 8) as usize] >>= 1;
+                        cpu.registers[0xF] = cpu.registers[((opcode & 0x0F00) >> 8) as usize] & 0x1;
+                        cpu.registers[((opcode & 0x0F00) >> 8) as usize] >>= 1;
                         
                         cpu.pc += 2;
                     }
                     0x0007 =>{
                         //set register to be subtracted values of VX and VY. Use VF as a carry, as each register can only hold 8 bits (max 255). If VF = 1, carry. else, do not.
-                        if cpu.V[((opcode & 0x00F0) >> 4) as usize] > cpu.V[((opcode & 0x0F00) >> 8) as usize]{
-                            cpu.V[0xF] = 1;
+                        if cpu.registers[((opcode & 0x0F00) >> 8) as usize] > cpu.registers[((opcode & 0x00F0) >> 4) as usize]{
+                            cpu.registers[0xF] = 0;
                         }else{
-                            cpu.V[0xF] = 0;
+                            cpu.registers[0xF] = 1;
                         }
                         
-                        cpu.V[((opcode & 0x0F00) >> 8) as usize] = cpu.V[((opcode & 0x00F0) >> 4) as usize] - cpu.V[((opcode & 0x0F00) >> 8) as usize];
+                        cpu.registers[((opcode & 0x0F00) >> 8) as usize] = cpu.registers[((opcode & 0x00F0) >> 4) as usize] - cpu.registers[((opcode & 0x0F00) >> 8) as usize];
                         cpu.pc += 2;
                         
                        
                     }
                     0x000E =>{
-                        cpu.V[0xF] = cpu.V[((opcode & 0x0F00) >> 8) as usize] >> 7;
-                        cpu.V[((opcode & 0x0F00) >> 8) as usize] <<= 1;
+                        cpu.registers[0xF] = cpu.registers[((opcode & 0x0F00) >> 8) as usize] >> 7;
+                        cpu.registers[((opcode & 0x0F00) >> 8) as usize] <<= 1;
                         cpu.pc += 2;
                     },
     
@@ -214,51 +215,47 @@ pub fn emulate_cycle(mut cpu : CPU) -> CPU{
                 }
             }
         0x9000 => {
-            if cpu.V[((opcode & 0x0F00) >> 8) as usize] != cpu.V[((opcode & 0x00F0) >> 4) as usize]{
+            if cpu.registers[((opcode & 0x0F00) >> 8) as usize] != cpu.registers[((opcode & 0x00F0) >> 4) as usize]{
 				cpu.pc += 4;
             }else{
                 cpu.pc += 2;
             }
         }
         0xA000 => {
-            cpu.I = (opcode & 0x0FFF) as u16;
+            cpu.index_register = (opcode & 0x0FFF) as u16;
             cpu.pc += 2;
         }
         0xB000 => {
-            cpu.pc = (opcode & 0x0FFF) as u16 + cpu.V[0] as u16;
+            cpu.pc = (opcode & 0x0FFF) as u16 + cpu.registers[0] as u16;
         }
         0xC000 => {
-            cpu.V[((opcode & 0x0F00) >> 8) as usize] = ((rand::thread_rng().gen_range(0, 255) % 0xFF) & (opcode & 0x00FF)) as u8;
+            cpu.registers[((opcode & 0x0F00) >> 8) as usize] = ((rand::thread_rng().gen_range(0, 255) % 0xFF) & (opcode & 0x00FF)) as u8;
             cpu.pc += 2;
         }
         0xD000 => {
-            let sprite_x = cpu.V[((opcode & 0x0F00) >> 8) as usize];
-            let sprite_y = cpu.V[((opcode & 0x00F0) >> 4) as usize];
+            let sprite_x = cpu.registers[((opcode & 0x0F00) >> 8) as usize];
+            let sprite_y = cpu.registers[((opcode & 0x00F0) >> 4) as usize];
             let sprite_height = opcode & 0x000F;
-            let mut pixel = 0;
 
-            cpu.V[0xF] = 0;// Sets to 1 if there's a collision
+            cpu.registers[0xF] = 0;// Sets to 1 if there's a collision
        
             for y_line in 0..sprite_height{
-                let line = cpu.memory[(cpu.I + y_line as u16) as usize];
+                let line = cpu.memory[(cpu.index_register + y_line as u16) as usize];
                 for x_line in 0..8{
-                    pixel = line & (0x80 >> x_line);
+                    let pixel = line & (0x80 >> x_line);
                     if pixel != 0{
 
                         
 
-                        let col = (sprite_x as u16 + x_line as u16) % 64;
-                        let row = (sprite_y as u16 + y_line as u16) % 32;
+                       
                         
-                        let idx = (col + (row * 64)) as usize;
+                        let idx = ((sprite_x as u16 + x_line as u16 + ((sprite_y as u16 + y_line) * 64)) % 2048) as usize;
 
-                        let current_pixel = cpu.vram[idx];
+                        
+                        cpu.registers[0xF] |= if cpu.vram[idx] == 1 { 1 } else { 0 };
+                        
                         cpu.vram[idx] ^= 1;
                         
-                        
-                        if current_pixel == 1{
-                            cpu.V[0xF] = 1;
-                        }
 
                         
                         //println!("old: {}\ncol: {}", current_pixel, cpu.V[0xF]);
@@ -288,14 +285,14 @@ pub fn emulate_cycle(mut cpu : CPU) -> CPU{
         0xE000 => {
             match opcode & 0x00FF{
                 0x009E => {
-                    if cpu.key[cpu.V[((opcode & 0x0F00) >> 8) as usize] as usize] != 0{
+                    if cpu.key[cpu.registers[((opcode & 0x0F00) >> 8) as usize] as usize] != 0{
                         cpu.pc += 4;
                     }else{
                         cpu.pc += 2;
                     }
                 }
                 0x00A1 => {
-                    if cpu.key[cpu.V[((opcode & 0x0F00) >> 8) as usize] as usize] == 0{
+                    if cpu.key[cpu.registers[((opcode & 0x0F00) >> 8) as usize] as usize] == 0{
                         cpu.pc += 4;
                     }else{
                         cpu.pc += 2;
@@ -307,7 +304,7 @@ pub fn emulate_cycle(mut cpu : CPU) -> CPU{
         0xF000 => {
             match opcode & 0x00FF{
                 0x0007 => {
-                    cpu.V[((opcode & 0x0F00) >> 8) as usize] =  cpu.delay_timer;
+                    cpu.registers[((opcode & 0x0F00) >> 8) as usize] =  cpu.delay_timer;
                     cpu.pc += 2;
                 }
                 0x000A => {
@@ -316,7 +313,7 @@ pub fn emulate_cycle(mut cpu : CPU) -> CPU{
                     for i in 0..16{
                         if cpu.key[i] != 0{
                             key_pressed = true;
-                            cpu.V[((opcode & 0x0F00) >> 8) as usize] =  i as u8;
+                            cpu.registers[((opcode & 0x0F00) >> 8) as usize] =  i as u8;
                         }
                     }
                     if key_pressed{
@@ -325,67 +322,71 @@ pub fn emulate_cycle(mut cpu : CPU) -> CPU{
                     
                 }    
                 0x0015 => {
-                    cpu.delay_timer = cpu.V[((opcode & 0x0F00) >> 8) as usize];
+                    cpu.delay_timer = cpu.registers[((opcode & 0x0F00) >> 8) as usize];
                     cpu.pc += 2;
                 }
                 0x0018 => {
-                    cpu.audio_timer = cpu.V[((opcode & 0x0F00) >> 8) as usize];
+                    cpu.audio_timer = cpu.registers[((opcode & 0x0F00) >> 8) as usize];
                     cpu.pc += 2;
                 }
                 0x001E => {
-                    if cpu.I + cpu.V[((opcode & 0x0F00) >> 8) as usize] as u16 > 0x0FFF{
-                        cpu.V[0xF] = 1;
+                    if cpu.index_register + cpu.registers[((opcode & 0x0F00) >> 8) as usize] as u16 > 0x0FFF{
+                        cpu.registers[0xF] = 1;
                     }else{
-                        cpu.V[0xF] = 0;
+                        cpu.registers[0xF] = 0;
                     }
-                    cpu.I += cpu.V[((opcode & 0x0F00) >> 8) as usize] as u16;
+                    cpu.index_register += cpu.registers[((opcode & 0x0F00) >> 8) as usize] as u16;
                     cpu.pc += 2;
                 }
                 0x0029 => {
-                    cpu.I = (cpu.V[((opcode & 0x0F00) >> 8) as usize] * 0x5) as u16;
+                    cpu.index_register = 0x50 + (cpu.registers[((opcode & 0x0F00) >> 8) as usize] * 0x5) as u16;
                     cpu.pc += 2;
                 }
                 0x0033 => {
-                    cpu.memory[cpu.I as usize]     = cpu.V[((opcode & 0x0F00) >> 8) as usize] / 100;
-					cpu.memory[cpu.I as usize + 1] = (cpu.V[((opcode & 0x0F00) >> 8) as usize] / 10) % 10;
-					cpu.memory[cpu.I as usize + 2] = (cpu.V[((opcode & 0x0F00) >> 8) as usize] % 100) % 10;
+                    cpu.memory[cpu.index_register as usize]     = cpu.registers[((opcode & 0x0F00) >> 8) as usize] / 100;
+					cpu.memory[cpu.index_register as usize + 1] = (cpu.registers[((opcode & 0x0F00) >> 8) as usize] / 10) % 10;
+					cpu.memory[cpu.index_register as usize + 2] = (cpu.registers[((opcode & 0x0F00) >> 8) as usize] % 100) % 10;
                     cpu.pc += 2;
                  
                 }
                 0x0055 => {
                     for i in 0..((((opcode & 0x0F00) >> 8) + 1) as usize){
-                        cpu.memory[cpu.I as usize + i] = cpu.V[i];
+                        cpu.memory[cpu.index_register as usize + i] = cpu.registers[i];
                     }
 
-                    cpu.I += ((opcode & 0x0F00 ) >> 8) + 1;
+                    cpu.index_register += ((opcode & 0x0F00 ) >> 8) + 1;
                     cpu.pc += 2;
                 }
                 0x0065 => {
-                    for i in 0..((((opcode & 0x0F00) >> 8) + 1) as usize){
-                        cpu.V[i] = cpu.memory[cpu.I as usize + i];
+                    for i in 0..(((opcode & 0x0F00) >> 8) + 1) as usize{
+                        cpu.registers[i] = cpu.memory[cpu.index_register as usize + i];
                     }
 
-                    cpu.I += ((opcode & 0x0F00) >> 8) + 1;
+                    cpu.index_register += ((opcode & 0x0F00) >> 8) + 1;
                     cpu.pc += 2;
                 }
-                _ => {panic!("Unknown opcode: {:#x?}", opcode)}
+                _ => {}
             }
     
 
         }
-        _ => {}
+        _ => {panic!("Not known!")}
 
 
     }
 
+    
 
     if cpu.delay_timer > 0{
         cpu.delay_timer -= 1;
     }
 
+    
+
     if cpu.audio_timer > 0{
+        
         if cpu.audio_timer == 1{
-            println!("Beep! :)");
+            cpu.audio_play = true;
         }
         cpu.audio_timer -= 1;
 
